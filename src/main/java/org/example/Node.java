@@ -43,10 +43,16 @@ public class Node {
                 Collections.sort(gossip.tokens());
 
                 NavigableMap<Integer, Token> ring = tokenMetadata.getRing();
+                Map<Token, Node> tokenToNode = tokenMetadata.getTokenToNode();
                 // rebalance tokens
                 for (Token token : gossip.tokens()) {
-                    int tailKey = ring.tailMap(token.partition()).firstKey();
-                    Node responsibleNode = tokenMetadata.getNode(tailKey);
+                    Integer tailKey = ring.ceilingKey(token.partition());
+                    if (tailKey == null) {
+                        tailKey = ring.firstKey();
+                    }
+
+                    Token vnode = getToken(tailKey, ring);
+                    Node responsibleNode = tokenToNode.get(vnode);
                     DbAccess.ScanAccess scanAccess = new DbAccess.ScanAccess(token.partition(), tailKey);
                     Result result = responsibleNode.process(scanAccess);
 
@@ -62,6 +68,7 @@ public class Node {
                     }
 
                     ring.put(token.partition(), token);
+                    tokenToNode.put(token, gossip.node());
                 }
             }
             case STABLE -> {
@@ -71,25 +78,40 @@ public class Node {
             case LEAVING -> {
                 // receive data stream from leaving node
                 // rebalance tokens in leaving node
+                Collections.sort(gossip.tokens());
                 NavigableMap<Integer, Token> ring = tokenMetadata.getRing();
+                Map<Token, Node> tokenToNode = tokenMetadata.getTokenToNode();
+
                 for (Token token : gossip.tokens()) {
-                    int tailKey = ring.tailMap(token.partition()).firstKey();
-                    Node responsibleNode = tokenMetadata.getNode(tailKey);
-                    DbAccess.ScanAccess scanAccess = new DbAccess.ScanAccess(token.partition(), tailKey);
+                    ring.remove(token.partition());
+                    Integer headKey = ring.lowerKey(token.partition());
+                    if (headKey == null) {
+                        headKey = ring.lastKey();
+                    }
+
+                    Token vnode = getToken(token.partition(), ring);
+                    Node responsibleNode = tokenToNode.get(vnode);
+
+                    if (gossip.node().id() == responsibleNode.id()) {
+                        continue;
+                    }
+
+                    // get (prevToken, T]
+                    DbAccess.ScanAccess scanAccess = new DbAccess.ScanAccess(headKey, token.partition());
                     Result result = gossip.node().process(scanAccess);
 
                     if (result instanceof Result.Error) {
                         throw new DatabaseOperationFailedException("Error while scanning node " + gossip.node().nodeName);
                     }
 
-                    // rebalance
+                    // handoff
                     for (Map.Entry<Integer, Entity> entry : ((Result.Ok<Set<Map.Entry<Integer, Entity>>>) result).value()) {
                         Entity entity = entry.getValue();
                         DbAccess.PutAccess putAccess = new DbAccess.PutAccess(entity.id(), entity.value());
                         responsibleNode.process(putAccess);
                     }
 
-                    ring.put(token.partition(), token);
+                    tokenToNode.remove(token);
                 }
             }
             case REMOVED -> {
@@ -129,5 +151,16 @@ public class Node {
         }
 
         return new Result.Error(new IllegalStateException("Unknown access method: " + access.getMethod()));
+    }
+
+    // clock-wise ownership
+    // [T, nextToken)
+    public Token getToken(int partition, NavigableMap<Integer, Token> ring) {
+        Integer tailKey = ring.ceilingKey(partition);
+        if (tailKey == null) {
+            tailKey = ring.firstKey(); // wrap-around
+        }
+
+        return ring.get(tailKey);
     }
 }
