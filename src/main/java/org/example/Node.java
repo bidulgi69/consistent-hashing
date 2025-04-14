@@ -110,8 +110,6 @@ public class Node {
                         DbAccess.PutAccess putAccess = new DbAccess.PutAccess(entity.id(), entity.value());
                         responsibleNode.process(putAccess);
                     }
-
-                    tokenToNode.remove(token);
                 }
             }
             case REMOVED -> {
