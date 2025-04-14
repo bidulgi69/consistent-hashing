@@ -45,7 +45,6 @@ public class Topology {
             nodes.values().forEach(n -> n.mergeGossip(aNewNodeTriesToJoin));
 
             // Add node to cluster after all nodes accept changes
-            nodes.put(node.id(), node);
             final Gossip aNewNodeCompletesToJoin  = new Gossip(node, NodeStatus.STABLE, tokens);
             nodes.values().forEach(n -> n.mergeGossip(aNewNodeCompletesToJoin));
         }
