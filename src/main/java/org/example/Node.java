@@ -40,10 +40,10 @@ public class Node {
         switch (gossip.status()) {
             case BOOTSTRAPING -> {
                 Node newNode = gossip.node();
-                // send data streams to new node
                 Collections.sort(gossip.tokens());
 
                 NavigableMap<Integer, Token> ring = tokenMetadata.getRing();
+                // rebalance tokens
                 for (Token token : gossip.tokens()) {
                     int tailKey = ring.tailMap(token.partition()).firstKey();
                     Node responsibleNode = tokenMetadata.getNode(tailKey);
@@ -70,7 +70,7 @@ public class Node {
             }
             case LEAVING -> {
                 // receive data stream from leaving node
-                // rebalance tokens of leaving node
+                // rebalance tokens in leaving node
                 NavigableMap<Integer, Token> ring = tokenMetadata.getRing();
                 for (Token token : gossip.tokens()) {
                     int tailKey = ring.tailMap(token.partition()).firstKey();
