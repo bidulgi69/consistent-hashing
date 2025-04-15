@@ -96,7 +96,7 @@ public class Node {
                         continue;
                     }
 
-                    // get (prevToken, T]
+                    // get [prevToken, T)
                     DbAccess.ScanAccess scanAccess = new DbAccess.ScanAccess(headKey, token.partition());
                     Result result = gossip.node().process(scanAccess);
 
@@ -151,7 +151,7 @@ public class Node {
         return new Result.Error(new IllegalStateException("Unknown access method: " + access.getMethod()));
     }
 
-    // clock-wise ownership
+    // clockwise ownership
     // [T, nextToken)
     public Token getToken(int partition, NavigableMap<Integer, Token> ring) {
         Integer tailKey = ring.ceilingKey(partition);
